@@ -1,7 +1,9 @@
 package com.elastic.cspm.service;
 
+import com.elastic.cspm.data.dto.QResourceDto;
 import com.elastic.cspm.data.dto.ResourceFilterRequestDto;
 import com.elastic.cspm.data.dto.ResourceResultData;
+import com.elastic.cspm.data.dto.ResourceResultResponseDto;
 import com.elastic.cspm.data.entity.DescribeResult;
 import com.elastic.cspm.data.entity.IAM;
 import com.elastic.cspm.data.entity.ScanGroup;
@@ -16,6 +18,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
@@ -26,20 +29,16 @@ import software.amazon.awssdk.services.iam.model.ListUsersRequest;
 import software.amazon.awssdk.services.iam.model.ListUsersResponse;
 import software.amazon.awssdk.services.iam.model.User;
 import software.amazon.awssdk.services.rds.RdsClient;
+import software.amazon.awssdk.services.rds.model.DBInstance;
 import software.amazon.awssdk.services.rds.model.DescribeDbInstancesRequest;
 import software.amazon.awssdk.services.rds.model.DescribeDbInstancesResponse;
 import software.amazon.awssdk.services.rds.model.RdsException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.services.rds.model.DBInstance;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
-
-import static com.elastic.cspm.data.dto.ResourceResultResponseDto.ResourceListDto;
-import static com.elastic.cspm.data.dto.ResourceResultResponseDto.ResourceRecordDto;
 
 @Slf4j
 @Service
@@ -51,35 +50,30 @@ public class ResourceService {
     private final CredentialManager credentialManager;
     private final ScanGroupRepository scanGroupRepository;
 
-    // IAM과 Group으로 스캔시간, AccountId, 리소스, 리소스ID, 서비스 조회
-    public ResourceListDto getAllResources(ResourceFilterRequestDto resourceFilterDto) throws Exception {
-        // DescriptionResult 정보 리스트 반환
-        try {
-            // 페이지 인덱스와 필터링 요청이 필요.
-            Pageable pageable = PageRequest.
-                    of(resourceFilterDto.getPageIndex(), resourceFilterDto.getPageSize());
-            log.info("페이징 : {}", pageable);
+    /**
+     * 스캔 후 페이징해서 Describe에 있는 데이터와 IAM의 AccountID 가져오기
+     */
+    public ResourceResultResponseDto.ResourceListDto scanResultList(int pageIndex, int pageSize) throws Exception {
+        try{
+            log.info("pageIndex, pageSize : {}, {}", pageIndex, pageSize);
 
-            Page<ResourceRecordDto> resources = resourceRepository.findResourceList(
-                    pageable,
-                    resourceFilterDto
-            ).map(ResourceRecordDto::of);
+            Pageable pageable = PageRequest.of(pageIndex, pageSize);
 
-            log.info("resources : {}", resources);
-            log.info("Content: {}", resources.getContent());
-            log.info("Total Elements: {}", resources.getTotalElements());
-            log.info("Total Pages: {}", resources.getTotalPages());
+            Page<ResourceResultResponseDto.ResourceRecordDto> resourceList =
+                    resourceRepository.findResourceList(pageable).map(ResourceResultResponseDto.ResourceRecordDto::of);
 
+            log.info("resourceList.toString() : {}", resourceList.stream().toList());
 
-            return new ResourceListDto(
-                    resources.getContent(),
-                    (int) resources.getTotalElements(),
-                    resources.getTotalPages()
+            return new ResourceResultResponseDto.ResourceListDto(
+                    resourceList.getContent(),
+                    (int) resourceList.getTotalElements(),
+                    resourceList.getTotalPages()
             );
-        } catch (Exception e) {
-            log.error(ExceptionUtils.getStackTrace(e));
-            throw e;
+        }catch (Exception e) {
+            log.debug(ExceptionUtils.getStackTrace(e));
+            throw new Exception("페이지를 찾지 못했습니다.");
         }
+
     }
 
     /**
@@ -143,39 +137,39 @@ public class ResourceService {
 
         String scanGroupName = group.getResourceGroupName();
 
-        switch (scanGroupName) {
-            case "VPC" -> {
-                result.addAll(vpcDescribe(scanGroupName)); // VPC 정보 추가
-                result.addAll(subnetDescribe(scanGroupName)); // 서브넷 정보 추가
-                result.addAll(sgDescribe(scanGroupName)); // 보안 그룹 정보 추가
-                result.addAll(routeDescribe(scanGroupName)); // 라우트 정보 추가
-                result.addAll(internetGateWayDescribe(scanGroupName)); // 인터넷 게이트웨이 정보 추가
-
-            }
-            case "EC2" -> {
-                result.addAll(instanceDescribe(scanGroupName));
-                result.addAll(ebsDescribe(scanGroupName));
-                result.addAll(eniDescribe(scanGroupName));
-            }
-            case "S3" -> {
-                result.addAll(s3Describe(scanGroupName));
-            }
-            case "default" -> {
-                result.addAll(vpcDescribe(scanGroupName));
-                result.addAll(subnetDescribe(scanGroupName));
-                result.addAll(sgDescribe(scanGroupName));
-                result.addAll(routeDescribe(scanGroupName));
-                result.addAll(internetGateWayDescribe(scanGroupName));
-
-                result.addAll(instanceDescribe(scanGroupName));
-                result.addAll(ebsDescribe(scanGroupName));
-                result.addAll(eniDescribe(scanGroupName));
-                result.addAll(s3Describe(scanGroupName));
-                result.addAll(rdsDescribe(scanGroupName));
-                result.addAll(iamDescribe(scanGroupName));
-            }
-            default -> throw new IllegalStateException("Unexpected value: " + scanGroupName);
-        };
+        if(group.isVpc()){
+            result.addAll(vpcDescribe(scanGroupName)); // VPC 정보 추가
+        }
+        if (group.isSubnet()) {
+            result.addAll(subnetDescribe(scanGroupName)); // 서브넷 정보 추가
+        }
+        if (group.isSecurityGroup()) {
+            result.addAll(sgDescribe(scanGroupName)); // 보안 그룹 정보 추가
+        }
+        if (group.isS3()) {
+            result.addAll(s3Describe(scanGroupName));
+        }
+        if (group.isRouteTable()) {
+            result.addAll(routeDescribe(scanGroupName)); // 라우트 정보 추가
+        }
+        if (group.isInternetGateway()) {
+            result.addAll(internetGateWayDescribe(scanGroupName)); // 인터넷 게이트웨이 정보 추가
+        }
+        if (group.isInstance()) {
+            result.addAll(instanceDescribe(scanGroupName));
+        }
+        if (group.isEbs()) {
+            result.addAll(ebsDescribe(scanGroupName));
+        }
+        if (group.isEni()) {
+            result.addAll(eniDescribe(scanGroupName));
+        }
+        if (group.isIam()) {
+            result.addAll(rdsDescribe(scanGroupName));
+        }
+        if (group.isRds()) {
+            result.addAll(rdsDescribe(scanGroupName));
+        }
 
         return result;
     }

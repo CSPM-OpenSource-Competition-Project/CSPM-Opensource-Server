@@ -1,23 +1,23 @@
 package com.elastic.cspm.controller;
 
-import com.elastic.cspm.data.dto.IAMScanGroupResponseDto;
-import com.elastic.cspm.data.dto.ResourceFilterRequestDto;
-import com.elastic.cspm.data.dto.ResourceResultData;
-import com.elastic.cspm.data.dto.ResourceResultResponseDto;
+import com.elastic.cspm.data.dto.*;
+import com.elastic.cspm.data.repository.ResourceRepository;
 import com.elastic.cspm.service.IamService;
 import com.elastic.cspm.service.RefreshService;
 import com.elastic.cspm.service.ResourceService;
 import com.elastic.cspm.service.ScanGroupService;
+import io.github.classgraph.ResourceList;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @RestController
@@ -28,6 +28,7 @@ public class ResourceController {
     private final IamService iamService;
     private final ScanGroupService scanGroupService;
     private final RefreshService refreshService;
+    private final ResourceRepository resourceRepository;
 
     /**
      * ScanGroup 선택 API
@@ -80,10 +81,11 @@ public class ResourceController {
 
 
     /**
-     * 스캔 시작 로직 진행 후 IAM 선택과 scanGroup을 필터링하여 조회.
+     * ScanGroup에서 boolean으로 1이 되어 있는 자원들을 찾아서 스캔 시작 로직 진행
+     * ex) VPC의 경우 vpc, subnet 등이 1로 되어 있음. 이것들만 스캔을 함.
      */
-    @PostMapping("/start-scan-list")
-    public ResponseEntity<Map<String, Object>> getResourcesAndStartScan(@RequestBody ResourceFilterRequestDto resourceFilterRequestDto) throws Exception {
+    @PostMapping("/startScan")
+    public ResponseEntity<List<ResourceResultData>> getResourcesAndStartScan(@RequestBody ResourceFilterRequestDto resourceFilterRequestDto) throws Exception {
         log.info("스캔 시작");
 
         if (resourceFilterRequestDto == null) {
@@ -95,19 +97,24 @@ public class ResourceController {
         log.info("ResourceResultData!!: {}", resourceResultData);
         log.info("스캔 끝");
 
-        // 필터링 리스트 조회
-        // 조회하는 부분 엔티티 추가돼서 쿼리 수정 필요.
-        ResourceResultResponseDto.ResourceListDto allResources = resourceService.getAllResources(resourceFilterRequestDto);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("resourceResultData", resourceResultData);
-        response.put("allResources", allResources);
-
-        log.info("resourceResultData : {}", resourceResultData);
-        log.info("allResources : {}", allResources);
-        log.info("response : {}", response.size());
-
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(resourceResultData);
     }
+
+    /**
+     * 필터값은 스캔 버튼을 눌르고 끝나면 다른 api가 패치되어서 가져온다.
+     * 스캔이 끝나면 프론트가 받은 데이터로 테이블에 올려준다.
+     * 페이징해서 describe에 있는 데이터를 프론트에서 보여주면 됨.
+     */
+    @GetMapping("/list")
+    public ResponseEntity<ResourceResultResponseDto.ResourceListDto> getResourcesAndList(
+            @RequestParam(defaultValue = "0") int pageIndex,
+            @RequestParam(defaultValue = "14") int pageSize
+    ) throws Exception {
+
+        ResourceResultResponseDto.ResourceListDto resourceListDto = resourceService.scanResultList(pageIndex, pageSize);
+
+
+        return ResponseEntity.ok(resourceListDto);
+    }
+
 }

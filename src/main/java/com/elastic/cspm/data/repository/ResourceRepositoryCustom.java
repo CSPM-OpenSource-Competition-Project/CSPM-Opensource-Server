@@ -9,8 +9,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ResourceRepositoryCustom {
     Page<QResourceDto> findResourceList (
-            Pageable pageable,
-            ResourceFilterRequestDto resourceFilterDto
+            Pageable pageable
     );
 }
 

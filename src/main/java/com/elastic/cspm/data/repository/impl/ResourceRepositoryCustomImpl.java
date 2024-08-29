@@ -1,11 +1,8 @@
 package com.elastic.cspm.data.repository.impl;
 
 import com.elastic.cspm.data.dto.QResourceDto;
-import com.elastic.cspm.data.dto.ResourceFilterRequestDto;
 import com.elastic.cspm.data.repository.ResourceRepositoryCustom;
-import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
-import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -18,10 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static com.elastic.cspm.data.entity.QDescribeResult.describeResult;
-import static com.elastic.cspm.data.entity.QIAM.iAM;
 import static com.elastic.cspm.data.entity.QMember.member;
-import static com.elastic.cspm.data.entity.QScanGroup.scanGroup;
-import static org.springframework.util.StringUtils.hasText;
 
 @Slf4j
 @Repository
@@ -31,53 +25,37 @@ public class ResourceRepositoryCustomImpl implements ResourceRepositoryCustom {
     public ResourceRepositoryCustomImpl(JPAQueryFactory queryFactory) {
         this.queryFactory = queryFactory;
     }
-//    public ResourceRepositoryCustomImpl(EntityManager em) {
-//        this.queryFactory = new JPAQueryFactory(em);
-//    }
 
     /**
      * 모든 검색 필터를 적용해서 리스트 반환하는 메서드
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<QResourceDto> findResourceList(Pageable pageable, ResourceFilterRequestDto resourceFilterDto) {
-        // 필터링 요청 보낸 로그
-        log.info("Searching resources - IAM : {}, ScanGroup : {}, Page : {}",
-                resourceFilterDto.getIam(), resourceFilterDto.getGroupName(), pageable);
+    public Page<QResourceDto> findResourceList(Pageable pageable) {
 
         // 필터링 쿼리 + 페이징
         List<QResourceDto> content = createResourceDtoQuery()
-                .where(
-                        iAMEq(resourceFilterDto.getIam()),
-                        scanGroupEq(resourceFilterDto.getGroupName())
-                )
+                .from(describeResult)
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
         // stream().toList();
 
+        long total = queryFactory
+                .selectFrom(describeResult)
+                .fetch().size();
+
         log.info("Found {}-ResourceResult", content.size());
+        log.info("Found {}-ResourceResult", total);
         log.info("Page Size : {}  and PageOffset : {}.", pageable.getPageSize(), pageable.getPageNumber());
 
-        return new PageImpl<>(content, pageable, content.size());
+        return new PageImpl<>(content, pageable, total);
 //        return new PageImpl<>(content);
     }
 
 
-    private BooleanExpression iAMEq(String iam) {
-        return hasText(iam) ? describeResult.iam.nickName.eq(iam) : null;
-    }
-
-    // ScanGroup 테이블에 데이터가 있어야 조회가 됨. 수정 필요
-    private BooleanExpression scanGroupEq(String group) {
-        log.info("resourcegroupname : {}", describeResult.iam.member.bridgeEntities.any().scanGroup.resourceGroupName.eq(group));
-        return hasText(group) ? describeResult.iam.member.bridgeEntities.any().scanGroup.resourceGroupName.eq(group) : null;
-//        return hasText(group) ? describeResult.scanGroup.eq(group) : null;
-    }
-
-
     /**
-     * projection qResourceDto 조회
+     * projection qResourceDto 조회 -> Select 해줌.
      * service를 알면 수정 -> 프론트에서 선택한 것을 그대로 반환해서 리스트에 적어버리면 되지 않을까 생각.
      * 그러면 이 메서드에서 프로젝션으로 생성하지 않아도 되지 않을까?
      */
