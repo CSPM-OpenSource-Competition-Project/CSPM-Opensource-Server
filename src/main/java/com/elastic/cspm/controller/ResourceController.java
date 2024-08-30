@@ -1,18 +1,17 @@
 package com.elastic.cspm.controller;
 
-import com.elastic.cspm.data.dto.*;
+import com.elastic.cspm.data.dto.IAMScanGroupResponseDto;
+import com.elastic.cspm.data.dto.ResourceFilterRequestDto;
+import com.elastic.cspm.data.dto.ResourceResultData;
+import com.elastic.cspm.data.dto.ResourceResultResponseDto;
 import com.elastic.cspm.data.repository.ResourceRepository;
 import com.elastic.cspm.service.IamService;
 import com.elastic.cspm.service.RefreshService;
 import com.elastic.cspm.service.ResourceService;
 import com.elastic.cspm.service.ScanGroupService;
-import io.github.classgraph.ResourceList;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -104,6 +103,7 @@ public class ResourceController {
      * 필터값은 스캔 버튼을 눌르고 끝나면 다른 api가 패치되어서 가져온다.
      * 스캔이 끝나면 프론트가 받은 데이터로 테이블에 올려준다.
      * 페이징해서 describe에 있는 데이터를 프론트에서 보여주면 됨.
+     * @RequestParam이므로 "/list?pageIndex=0&pageSize=14" 이런 식으로 전달함.
      */
     @GetMapping("/list")
     public ResponseEntity<ResourceResultResponseDto.ResourceListDto> getResourcesAndList(
@@ -112,9 +112,6 @@ public class ResourceController {
     ) throws Exception {
 
         ResourceResultResponseDto.ResourceListDto resourceListDto = resourceService.scanResultList(pageIndex, pageSize);
-
-
         return ResponseEntity.ok(resourceListDto);
     }
-
 }
