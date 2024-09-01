@@ -81,7 +81,6 @@ public class ResourceService {
      */
     public List<ResourceResultData> startDescribe(ResourceFilterRequestDto resourceFilterRequestDto) throws Exception {
         List<ResourceResultData> describeResultDataList = new ArrayList<>();
-        log.info("resourceFilter : {}", resourceFilterRequestDto);
 
         String iamName = resourceFilterRequestDto.getIam(); // IAM 닉네임
         IAM user = iamRepository.findIAMByNickName(iamName);
@@ -96,7 +95,6 @@ public class ResourceService {
         List<DescribeResult> describeEntityList = new ArrayList<>();
 
         ResourceResultData resourceResultData = ResourceResultData.of(
-                LocalDateTime.now(),
                 resourceFilterRequestDto.getIam(),
                 resourceFilterRequestDto.getGroupName(),
                 isAllSuccess,
@@ -105,10 +103,11 @@ public class ResourceService {
 
         // 스캔 시작 + Describe_Result에 저장 완료
         try {
-            ScanGroup group = scanGroupRepository.findByResourceGroupName(resourceResultData.getResourceId()).orElse(null);
+            log.info("resourceFilterRequestDto.getIam() : {}", resourceFilterRequestDto.getIam());
+            log.info("resourceFilterRequestDto.getGroupName() : {}", resourceFilterRequestDto.getGroupName());
+            ScanGroup group = scanGroupRepository.findByResourceGroupName(resourceResultData.getGroupName()).orElse(null);
             log.info("group : {}", group);
             if(group != null) {
-                log.info("scanDescribe : {}", group);
                 List<DescribeResult> describeResults = groupScanDescribe(group);
                 log.info("describeResultDataList : {}", describeResults);
                 describeEntityList.addAll(describeResults);
@@ -122,7 +121,7 @@ public class ResourceService {
 
         describeResultDataList.add(resourceResultData);
         log.info("isAllSuccess : {}", isAllSuccess);
-        log.info("isAllSuccess : {}", describeEntityList);
+        log.info("describeEntityList : {}", describeEntityList);
 
         return describeResultDataList;
     }

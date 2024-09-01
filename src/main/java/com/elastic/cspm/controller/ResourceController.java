@@ -93,7 +93,6 @@ public class ResourceController {
 
         // iam과 group 선택하지 않으면 에러가 발생.
         List<ResourceResultData> resourceResultData = resourceService.startDescribe(resourceFilterRequestDto);
-        log.info("ResourceResultData!!: {}", resourceResultData);
         log.info("스캔 끝");
 
         return ResponseEntity.ok(resourceResultData);
